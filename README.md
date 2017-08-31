@@ -2,6 +2,10 @@
 
 These are a set of classes for logging and/or kv value storage that work 'identically' whether or not they are currently running on AWS (EC2, whatever). By 'identically' I mean that when running on AWS, the platform's native features are used (in this case CloudWatch Logs and the SSM Parameter store) with no code changes.
 
+This is Python 3 code and I imagine it runs under Python 2 but, well, maybe not.
+
+Your best bet for installation is ```pip3 install awsornot```.
+
 ## awsornot.LogHandler
 
 Construct the handler with CloudWatch "group" and "stream" parameters - the logs themselves are delivered asynchronously so your app doesn't have to wait for AWS to do it's thing. Note that you can optionally supply a blacklist of strings which, if occurring in an about-to-be-logged line will prevent the line from being logged.
