@@ -1,8 +1,8 @@
 # Copyright (c) 2017 David Preece, All rights reserved.
-# 
+#
 # Permission to use, copy, modify, and/or distribute this software for any
 # purpose with or without fee is hereby granted.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
 # WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
 # MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
@@ -33,11 +33,8 @@ class KeyValue(Thread):  # thread is for the server (that won't be run under AWS
     ssm = None
     dynamic_data = None
 
-    def __init__(self, non_aws_filename="kvstore", port=1026):
+    def __init__(self, non_aws_filename="kvstore", port=1026, *, noserver=False):
         super().__init__(target=KeyValue._serve, name=str("KVStore"), daemon=True)
-        # Only create one instance
-        if KeyValue.fname is not None:
-            raise RuntimeError("Only create one instance of KeyValue")
         # Self.ssm gets created if we are under AWS
         os.makedirs(os.path.basename(non_aws_filename), exist_ok=True)
         KeyValue.fname = non_aws_filename
@@ -46,7 +43,8 @@ class KeyValue(Thread):  # thread is for the server (that won't be run under AWS
         if KeyValue.dynamic_data is not None:
             KeyValue.ssm = boto_client('ssm', self.dynamic_data)
         else:
-            self.start()  # the thread for the kv server
+            if not noserver:
+                self.start()  # the thread for the kv server
 
     def stop(self):
         if KeyValue.dynamic_data is None:  # only if we're running the KV server
