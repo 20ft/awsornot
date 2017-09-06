@@ -1,8 +1,8 @@
 # Copyright (c) 2017 David Preece, All rights reserved.
-# 
+#
 # Permission to use, copy, modify, and/or distribute this software for any
 # purpose with or without fee is hereby granted.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
 # WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
 # MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
@@ -37,9 +37,3 @@ def boto_client(type, dynamic_data):
     except ClientError:
         raise RuntimeError("There was a problem creating a client for '%s'\n" +
                            "Please ensure you are running under a profile with the correct permissions.")
-
-
-def kv_get(server):
-    """Collect the data from the kv server and interpret"""
-    dynamic_data_text = requests.get('http://%s:1026' % server).content
-    return cbor.loads(dynamic_data_text)

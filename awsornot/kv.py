@@ -10,45 +10,36 @@
 # WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-
 """A drop in replacement for boto3.session.client"""
 
 
-import cbor
-import os
-import os.path
+import json
+import socketserver
+import _thread
 import logging
-from bottle import Bottle, run
-from threading import Thread
 from . import dynamic_data_or_none, boto_client
 from botocore.exceptions import ClientError
 
 
-kvserve = Bottle()
-
-
-class KeyValue(Thread):  # thread is for the server (that won't be run under AWS)
+class KeyValue:
     fname = None
-    port = None
-    ssm = None
-    dynamic_data = None
 
     def __init__(self, non_aws_filename="kvstore", port=1026, *, noserver=False):
-        super().__init__(target=KeyValue._serve, name=str("KVStore"), daemon=True)
         # Self.ssm gets created if we are under AWS
-        os.makedirs(os.path.basename(non_aws_filename), exist_ok=True)
         KeyValue.fname = non_aws_filename
-        KeyValue.port = port
-        KeyValue.dynamic_data = dynamic_data_or_none()
-        if KeyValue.dynamic_data is not None:
-            KeyValue.ssm = boto_client('ssm', self.dynamic_data)
+        self.dynamic_data = dynamic_data_or_none()
+        self.ssm = None
+        self.server = None
+        if self.dynamic_data is not None:
+            self.ssm = boto_client('ssm', self.dynamic_data)
         else:
             if not noserver:
-                self.start()  # the thread for the kv server
+                self.server = socketserver.UDPServer(('0.0.0.0', port), KeyValue._UDPHandler)
+                _thread.start_new_thread(socketserver.UDPServer.serve_forever, (self.server,))
 
     def stop(self):
-        if KeyValue.dynamic_data is None:  # only if we're running the KV server
-            kvserve.close()
+        if self.server is not None:
+            self.server.shutdown()
 
     # non pep8 names are to retain compatibility with the AWS calls
     def put_parameter(self, Name, Description, Type, Value, Overwrite):
@@ -60,8 +51,11 @@ class KeyValue(Thread):  # thread is for the server (that won't be run under AWS
             if Name in values.keys() and not Overwrite:
                 raise ValueError("Tried to overwrite a kv parameter with Overwrite=False")
             values[Name] = Value
-            with open(KeyValue.fname, "w+b") as f:
-                f.write(cbor.dumps(values))
+            json_string = json.dumps(values, indent=2)
+            if len(json_string) > 65536:
+                raise RuntimeError("Cannot write parameter, KV storage total allocation is 64K")
+            with open(KeyValue.fname, "w") as f:
+                f.write(json_string)
 
     # ditto, retaining compatibility
     def get_parameter(self, Name):
@@ -78,24 +72,17 @@ class KeyValue(Thread):  # thread is for the server (that won't be run under AWS
     @staticmethod
     def _values():
         try:
-            with open(KeyValue.fname, "r+b") as f:
-                return cbor.loads(f.read())
-        except FileNotFoundError:
+            with open(KeyValue.fname, "r") as f:
+                return json.loads(f.read())
+        except (FileNotFoundError, json.decoder.JSONDecodeError):
             return {}
 
-    # serving the values with bottle
-    @staticmethod
-    def _serve():
-        try:
-            logging.info("Started KV server: 0.0.0.0:" + str(KeyValue.port))
-            run(app=kvserve, host='0.0.0.0', port=KeyValue.port, quiet=True)
-        except OSError:
-            logging.critical("Could not bind KV server, exiting")
-            exit(1)
-
-    @staticmethod
-    @kvserve.route('/')
-    def _state():
-        with open(KeyValue.fname, "r+b") as f:
-            return f.read()
-
+    class _UDPHandler(socketserver.BaseRequestHandler):
+        def handle(self):
+            skt = self.request[1]
+            try:
+                with open(KeyValue.fname, "r") as f:
+                    skt.sendto(f.read().encode(), self.client_address)
+                logging.debug("Served kv store to: " + str(self.client_address))
+            except FileNotFoundError:
+                return skt.sendto("{}", self.client_address)
