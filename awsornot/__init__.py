@@ -18,15 +18,22 @@ import requests
 import boto3
 from botocore.exceptions import ClientError
 
+dd_result_cache = None
+dd_have_result = False
+
 
 def dynamic_data_or_none():
     """Returns the instance identity document on AWS or None"""
-    try:
-        dynamic_data_text = requests.get('http://169.254.169.254/latest/dynamic/instance-identity/document',
-                                         timeout=0.5).text
-        return json.loads(dynamic_data_text)
-    except requests.exceptions.ConnectionError:
-        return None
+    global dd_result_cache, dd_have_result
+    if not dd_have_result:
+        try:
+            dynamic_data_text = requests.get('http://169.254.169.254/latest/dynamic/instance-identity/document',
+                                             timeout=0.5).text
+            dd_result_cache = json.loads(dynamic_data_text)
+        except requests.exceptions.ConnectionError:
+            dd_result_cache = None
+        dd_have_result = True
+    return dd_result_cache
 
 
 def boto_client(type, dynamic_data):
