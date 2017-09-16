@@ -1,8 +1,6 @@
 # AWS or Not
 
-These are a set of classes for logging and/or kv value storage that work 'identically' whether or not they are currently running on AWS (EC2, whatever). By 'identically' I mean that when running on AWS, the platform's native features are used (in this case CloudWatch Logs and the SSM Parameter store) with no code changes.
-
-This is Python 3 code and I imagine it runs under Python 2 but, well, maybe not.
+These are a set of classes for logging and/or kv value storage that work 'identically' whether or not they are currently running on AWS (EC2, whatever) - and using a drop-in compatible subset of the boto3 api. By 'identically' I mean that the platform's native features are used with no code changes.
 
 Your best bet for installation is ```pip3 install awsornot```.
 
