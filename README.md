@@ -44,3 +44,40 @@ kv = awsornot.KeyValueRead('server.local')
 
 print(kv.get_parameter(Name='param-name')['Parameter']['Value'])
 ```
+
+## Working with IAM
+
+If you're building a role with IAM you will need the following statement for logging to work:
+```
+{
+  "Effect" : "Allow",
+  "Action" : [
+    "logs:CreateLogGroup",
+    "logs:CreateLogStream",
+    "logs:PutLogEvents",
+    "logs:DescribeLogGroups",
+    "logs:DescribeLogStreams"
+  ],
+  "Resource" : [
+    "*"
+  ]
+}
+```
+...and I use this for parameters:
+```
+{
+  "Effect" : "Allow",
+  "Action" : [
+    "ssm:DeleteParameter",
+    "ssm:DescribeParameters",
+    "ssm:GetParameterHistory",
+    "ssm:GetParameter",
+    "ssm:GetParameters",
+    "ssm:GetParametersByPath",
+    "ssm:PutParameter"
+  ],
+  "Resource" : [
+    "*"
+  ]
+}
+```
