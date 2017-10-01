@@ -15,7 +15,7 @@
 from setuptools import setup
 
 setup(name='awsornot',
-      version='0.7.0',
+      version='0.7.1',
       author='David Preece',
       author_email='davep@polymath.tech',
       url='https://polymath.tech',

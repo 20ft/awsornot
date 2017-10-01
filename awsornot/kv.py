@@ -17,6 +17,7 @@ import json
 import socketserver
 import _thread
 import logging
+import os
 from . import dynamic_data_or_none, boto_client
 from botocore.exceptions import ClientError
 
@@ -33,6 +34,9 @@ class KeyValue:
         if self.dynamic_data is not None:
             self.ssm = boto_client('ssm', self.dynamic_data)
         else:
+            if '/' in non_aws_filename:  # at least *a* directory
+                last_slash = non_aws_filename.rfind('/')
+                os.makedirs(non_aws_filename[:last_slash], exist_ok=True)
             if not noserver:
                 self.server = socketserver.UDPServer(('0.0.0.0', port), KeyValue._UDPHandler)
                 _thread.start_new_thread(socketserver.UDPServer.serve_forever, (self.server,))
