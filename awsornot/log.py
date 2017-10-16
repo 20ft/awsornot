@@ -1,8 +1,8 @@
 # Copyright (c) 2017 David Preece, All rights reserved.
-# 
+#
 # Permission to use, copy, modify, and/or distribute this software for any
 # purpose with or without fee is hereby granted.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
 # WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
 # MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
@@ -18,6 +18,7 @@ import requests
 import boto3
 import logging
 import json
+import time
 from botocore.exceptions import ClientError
 from multiprocessing import Queue, Process
 
@@ -54,6 +55,7 @@ class LogHandler(logging.Handler):
         self.process.start()
 
     def stop(self):
+        time.sleep(1)  # wait for any stragglers that want to log their closing down
         self.queue.put(None)
         self.process.join()
 
@@ -102,8 +104,8 @@ class LogHandler(logging.Handler):
         while True:
             try:
                 record = queue.get()
-            except KeyboardInterrupt:  # so we get 'record is None' to close, regardless of if it came off the queue
-                record = None
+            except KeyboardInterrupt:
+                continue  # we're going to keep fetching records until "None" is posted
             if record is None:
                 return
 
