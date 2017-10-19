@@ -55,7 +55,6 @@ class LogHandler(logging.Handler):
         self.process.start()
 
     def stop(self):
-        time.sleep(1)  # wait for any stragglers that want to log their closing down
         self.queue.put(None)
         self.process.join()
 
