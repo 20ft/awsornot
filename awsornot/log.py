@@ -19,7 +19,7 @@ import boto3
 import logging
 import json
 import time
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, EndpointConnectionError
 from multiprocessing import Queue, Process
 
 
@@ -105,6 +105,8 @@ class LogHandler(logging.Handler):
                 record = queue.get()
             except KeyboardInterrupt:
                 continue  # we're going to keep fetching records until "None" is posted
+            except EOFError:
+                return  # that'll do
             if record is None:
                 return
 
@@ -136,16 +138,25 @@ class LogHandler(logging.Handler):
                         ]  # you can't pass None as the sequence token
                 )
             else:
-                result = aws_logger.put_log_events(
-                        logGroupName=group,
-                        logStreamName=stream,
-                        logEvents=[
-                            {
-                                'timestamp': int(record.created * 1000),
-                                'message': text
-                            }
-                        ],
-                        sequenceToken=sequence_token
-                )
-            sequence_token = result['nextSequenceToken']
-
+                sent = False
+                while not sent:
+                    try:
+                        result = aws_logger.put_log_events(
+                                logGroupName=group,
+                                logStreamName=stream,
+                                logEvents=[
+                                    {
+                                        'timestamp': int(record.created * 1000),
+                                        'message': text
+                                    }
+                                ],
+                                sequenceToken=sequence_token
+                        )
+                        sent = True
+                    except ClientError:
+                        print("....LogHandler told to back off by AWS.")
+                        time.sleep(2)
+                    except EndpointConnectionError:
+                        print("...Name resolution has failed")
+                        self.queue.put(None)
+                sequence_token = result['nextSequenceToken']
