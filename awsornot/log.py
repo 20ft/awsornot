@@ -19,6 +19,7 @@ import boto3
 import logging
 import json
 import time
+import signal
 from botocore.exceptions import ClientError, EndpointConnectionError
 from multiprocessing import Queue, Process
 
@@ -44,88 +45,80 @@ class LogHandler(logging.Handler):
             stream_name = None
 
         super().__init__(level)
-
-        # wake the actual logger and ensure it has a queue
-        self.queue = Queue()  # so log messages can be delivered
+        self.blacklist = blacklist if blacklist is not None else []
+        self.formatter = logging.Formatter(fmt='%(levelname)-8s %(message)s')
         logging.basicConfig(level=level, handlers=[self])
 
-        # delivery process
-        self.process = Process(target=self.background, args=(group, stream_name, self.queue))
-        self.blacklist = blacklist if blacklist is not None else []
-        self.process.start()
-
-    def stop(self):
-        self.queue.put(None)
-        self.process.join()
+        # delivery process (aws only)
+        if stream_name is not None:
+            self.queue = Queue()
+            self.process = Process(target=self.background, args=(group, stream_name, self.queue))
+            self.process.start()
 
     def emit(self, record):
-        # urllib tries to log itself doing all sorts
+        # urllib and boto try to log themselves doing all sorts
         if record.name.startswith('urllib3') or record.name.startswith('botocore'):
             return
+
+        # is the log on the blacklist?
+        text = self.formatter.format(record)
+        for string in self.blacklist:
+            if string in text:
+                return
+
         # otherwise enqueue the record
+        print(self.formatter.format(record))
         self.queue.put(record)
+
+    def stop(self, signal=None, frame=None):
+        """Wait 1 second to catch logs from closing processes."""
+        time.sleep(1)
+        self.queue.put(None)
 
     def background(self, group, stream, queue):
         """Runs as a background process delivering the logs as they arrive (to avoid stalling the event loop)"""
-        sequence_token = None
-        if stream is not None:  # on aws
-            # create a cloud watch log client
-            dynamic_data_text = requests.get('http://169.254.169.254/latest/dynamic/instance-identity/document').text
-            aws_logger = boto3.client('logs', region_name=json.loads(dynamic_data_text)['region'])
+        # catch KeyboardInterrupt because we want to log as we close down
+        signal.signal(signal.SIGINT, self.stop)
 
-            # create the group and stream if need be
-            groups = aws_logger.describe_log_groups(
-                logGroupNamePrefix=group
-            )['logGroups']
-            groups_dict = {g['logGroupName']: g for g in groups}
-            if group not in groups_dict.keys():
-                aws_logger.create_log_group(
-                        logGroupName=group
-                )
-            streams = aws_logger.describe_log_streams(
+        # create a cloud watch log client
+        sequence_token = None
+        dynamic_data_text = requests.get('http://169.254.169.254/latest/dynamic/instance-identity/document').text
+        aws_logger = boto3.client('logs', region_name=json.loads(dynamic_data_text)['region'])
+
+        # create the group and stream if need be
+        groups = aws_logger.describe_log_groups(
+            logGroupNamePrefix=group
+        )['logGroups']
+        groups_dict = {g['logGroupName']: g for g in groups}
+        if group not in groups_dict.keys():
+            aws_logger.create_log_group(
+                    logGroupName=group
+            )
+        streams = aws_logger.describe_log_streams(
+                logGroupName=group,
+                logStreamNamePrefix=stream
+        )['logStreams']
+        streams_dict = {s['logStreamName']: s for s in streams}
+        if stream not in streams_dict.keys():
+            result = aws_logger.create_log_stream(
                     logGroupName=group,
-                    logStreamNamePrefix=stream
-            )['logStreams']
-            streams_dict = {s['logStreamName']: s for s in streams}
-            if stream not in streams_dict.keys():
-                result = aws_logger.create_log_stream(
-                        logGroupName=group,
-                        logStreamName=stream
-                )
-            else:
-                try:
-                    sequence_token = streams_dict[stream]['uploadSequenceToken']
-                except KeyError:
-                    pass
+                    logStreamName=stream
+            )
+        else:
+            try:
+                sequence_token = streams_dict[stream]['uploadSequenceToken']
+            except KeyError:
+                pass
 
         # loop picking logs off the queue and delivering
-        formatter = logging.Formatter(fmt='%(levelname)-8s %(message)s')
         while True:
-            try:
-                record = queue.get()
-            except KeyboardInterrupt:
-                continue  # we're going to keep fetching records until "None" is posted
-            except EOFError:
-                return  # that'll do
+            record = queue.get()
             if record is None:
                 return
-
-            # is the log on the blacklist?
-            text = formatter.format(record)
-            blacklisted = False
-            for string in self.blacklist:
-                if string in text:
-                    blacklisted = True
-                    break
-            if blacklisted:
-                continue
-
-            # actually log
-            print(text)
-            if stream is None:  # no more work if we're not using AWS
-                continue
+            text = self.formatter.format(record)
 
             # No, seriously, you have to do this :(
+            result = None
             if sequence_token is None:
                 result = aws_logger.put_log_events(
                         logGroupName=group,
