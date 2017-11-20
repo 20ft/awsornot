@@ -50,6 +50,7 @@ class LogHandler(logging.Handler):
         logging.basicConfig(level=level, handlers=[self])
 
         # delivery process (aws only)
+        self.queue = None
         if stream_name is not None:
             self.queue = Queue()
             self.process = Process(target=self.background, args=(group, stream_name, self.queue))
@@ -68,12 +69,14 @@ class LogHandler(logging.Handler):
 
         # otherwise enqueue the record
         print(self.formatter.format(record))
-        self.queue.put(record)
+        if self.queue is not None:
+            self.queue.put(record)
 
     def stop(self, signal=None, frame=None):
         """Wait 1 second to catch logs from closing processes."""
         time.sleep(1)
-        self.queue.put(None)
+        if self.queue is not None:
+            self.queue.put(None)
 
     def background(self, group, stream, queue):
         """Runs as a background process delivering the logs as they arrive (to avoid stalling the event loop)"""
