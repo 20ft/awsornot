@@ -72,16 +72,15 @@ class LogHandler(logging.Handler):
         if self.queue is not None:
             self.queue.put(record)
 
-    def stop(self, signal=None, frame=None):
-        """Wait 1 second to catch logs from closing processes."""
-        time.sleep(1)
+    def stop(self):
+        """Posts a message on the queue telling the logging process to stop."""
         if self.queue is not None:
             self.queue.put(None)
 
     def background(self, group, stream, queue):
         """Runs as a background process delivering the logs as they arrive (to avoid stalling the event loop)"""
-        # catch KeyboardInterrupt because we want to log as we close down
-        signal.signal(signal.SIGINT, self.stop)
+        # ignore KeyboardInterrupt because we want to log as we close down
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
 
         # create a cloud watch log client
         sequence_token = None
