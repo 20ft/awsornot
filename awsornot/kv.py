@@ -31,7 +31,7 @@ class KeyValue:
         self.dynamic_data = dynamic_data_or_none()
         self.ssm = None
         self.server = None
-        if self.dynamic_data is not None:
+        if self.is_aws():
             self.ssm = boto_client('ssm', self.dynamic_data)
         else:
             if '/' in non_aws_filename:  # at least *a* directory
@@ -44,6 +44,9 @@ class KeyValue:
     def stop(self):
         if self.server is not None:
             self.server.shutdown()
+            
+    def is_aws(self):
+        return self.dynamic_data is not None
 
     # non pep8 names are to retain compatibility with the AWS calls
     def put_parameter(self, Name, Description, Type, Value, Overwrite):
