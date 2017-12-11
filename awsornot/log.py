@@ -20,6 +20,7 @@ import logging
 import json
 import time
 import signal
+import botocore.errorfactory
 from botocore.exceptions import ClientError, EndpointConnectionError
 from multiprocessing import Queue, Process
 
@@ -83,7 +84,6 @@ class LogHandler(logging.Handler):
         signal.signal(signal.SIGINT, signal.SIG_IGN)
 
         # create a cloud watch log client
-        sequence_token = None
         dynamic_data_text = requests.get('http://169.254.169.254/latest/dynamic/instance-identity/document').text
         aws_logger = boto3.client('logs', region_name=json.loads(dynamic_data_text)['region'])
 
@@ -96,21 +96,21 @@ class LogHandler(logging.Handler):
             aws_logger.create_log_group(
                     logGroupName=group
             )
-        streams = aws_logger.describe_log_streams(
+        stream_desc = aws_logger.describe_log_streams(
                 logGroupName=group,
                 logStreamNamePrefix=stream
-        )['logStreams']
-        streams_dict = {s['logStreamName']: s for s in streams}
-        if stream not in streams_dict.keys():
-            result = aws_logger.create_log_stream(
+        )
+        sequence_token = '0'
+        try:
+            sequence_token = stream_desc['nextToken']
+        except KeyError:
+            pass
+        streams = {s['logStreamName'] for s in stream_desc['logStreams']}
+        if stream not in streams:
+            aws_logger.create_log_stream(
                     logGroupName=group,
                     logStreamName=stream
             )
-        else:
-            try:
-                sequence_token = streams_dict[stream]['uploadSequenceToken']
-            except KeyError:
-                pass
 
         # loop picking logs off the queue and delivering
         while True:
@@ -118,40 +118,26 @@ class LogHandler(logging.Handler):
             if record is None:
                 return
             text = self.formatter.format(record)
+            sent = False
+            while not sent:
+                try:
+                    result = aws_logger.put_log_events(
+                            logGroupName=group,
+                            logStreamName=stream,
+                            logEvents=[
+                                {
+                                    'timestamp': int(record.created * 1000),
+                                    'message': text
+                                }
+                            ],
+                            sequenceToken=sequence_token
+                    )
+                    sequence_token = result['nextSequenceToken']
+                    sent = True
+                except ClientError as e:
+                    print("....LogHandler told to back off by AWS.")
+                    time.sleep(2)
+                except EndpointConnectionError:
+                    print("...Name resolution has failed")
+                    self.queue.put(None)
 
-            # No, seriously, you have to do this :(
-            result = None
-            if sequence_token is None:
-                result = aws_logger.put_log_events(
-                        logGroupName=group,
-                        logStreamName=stream,
-                        logEvents=[
-                            {
-                                'timestamp': int(record.created * 1000),
-                                'message': text
-                            }
-                        ]  # you can't pass None as the sequence token
-                )
-            else:
-                sent = False
-                while not sent:
-                    try:
-                        result = aws_logger.put_log_events(
-                                logGroupName=group,
-                                logStreamName=stream,
-                                logEvents=[
-                                    {
-                                        'timestamp': int(record.created * 1000),
-                                        'message': text
-                                    }
-                                ],
-                                sequenceToken=sequence_token
-                        )
-                        sent = True
-                    except ClientError:
-                        print("....LogHandler told to back off by AWS.")
-                        time.sleep(2)
-                    except EndpointConnectionError:
-                        print("...Name resolution has failed")
-                        self.queue.put(None)
-                sequence_token = result['nextSequenceToken']
