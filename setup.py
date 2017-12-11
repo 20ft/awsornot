@@ -15,10 +15,10 @@
 from setuptools import setup
 
 setup(name='awsornot',
-      version='0.7.1',
+      version='1.0.1',
       author='David Preece',
-      author_email='davep@polymath.tech',
-      url='https://polymath.tech',
+      author_email='davep@20ft.nz',
+      url='https://20ft.nz',
       license='BSD',
       packages=['awsornot'],
       install_requires=['requests', 'boto3'],
