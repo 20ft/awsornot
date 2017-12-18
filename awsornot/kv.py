@@ -49,15 +49,15 @@ class KeyValue:
         return self.dynamic_data is not None
 
     # non pep8 names are to retain compatibility with the AWS calls
-    def put_parameter(self, Name, Description, Type, Value, Overwrite):
+    def put_parameter(self, Name=name, Description=description, Type=type, Value=value, Overwrite=overwrite):
         if self.ssm:
-            self.ssm.put_parameter(Name=Name, Description=Description, Type=Type, Value=Value, Overwrite=Overwrite)
+            self.ssm.put_parameter(Name=name, Description=description, Type=type, Value=value, Overwrite=overwrite)
         else:
             # write into a file just called "kvstore". create if not there
             values = KeyValue._values()
-            if Name in values.keys() and not Overwrite:
+            if name in values.keys() and not overwrite:
                 raise ValueError("Tried to overwrite a kv parameter with Overwrite=False")
-            values[Name] = Value
+            values[name] = value
             json_string = json.dumps(values, indent=2)
             if len(json_string) > 65536:
                 raise RuntimeError("Cannot write parameter, KV storage total allocation is 64K")
@@ -65,13 +65,13 @@ class KeyValue:
                 f.write(json_string)
 
     # ditto, retaining compatibility
-    def get_parameter(self, Name):
+    def get_parameter(self, Name=name):
         if self.ssm:
-            return self.ssm.get_parameter(Name=Name)
+            return self.ssm.get_parameter(Name=name)
         else:
             values = KeyValue._values()
             try:
-                return {'Parameter': {'Value': values[Name]}}
+                return {'Parameter': {'Value': values[name]}}
             except KeyError:
                 raise ClientError(operation_name='get_parameter',
                                   error_response={'ResponseMetadata': {'MaxAttemptsReached': True}})
