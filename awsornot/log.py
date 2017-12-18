@@ -42,7 +42,7 @@ class LogHandler(logging.Handler):
             stream_name = stream + '/' + iid
 
         except requests.exceptions.ConnectionError:  # not running under AWS
-            level = logging.INFO
+            level = logging.DEBUG
             stream_name = None
 
         super().__init__(level)
@@ -101,16 +101,14 @@ class LogHandler(logging.Handler):
                 logStreamNamePrefix=stream
         )
         sequence_token = '0'
-        try:
-            sequence_token = stream_desc['nextToken']
-        except KeyError:
-            pass
-        streams = {s['logStreamName'] for s in stream_desc['logStreams']}
+        streams = {s['logStreamName']: s for s in stream_desc['logStreams']}
         if stream not in streams:
             aws_logger.create_log_stream(
                     logGroupName=group,
                     logStreamName=stream
             )
+        else:
+            sequence_token = streams[stream]['uploadSequenceToken']
 
         # loop picking logs off the queue and delivering
         while True:
@@ -135,7 +133,7 @@ class LogHandler(logging.Handler):
                     sequence_token = result['nextSequenceToken']
                     sent = True
                 except ClientError as e:
-                    print("....LogHandler told to back off by AWS.")
+                    print("....LogHandler error: " + str(e))
                     time.sleep(2)
                 except EndpointConnectionError:
                     print("...Name resolution has failed")
