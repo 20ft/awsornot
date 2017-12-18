@@ -40,13 +40,12 @@ class KeyValueRead:
     def on_aws(self):
         return self.ssm is not None
 
-    # non pep8 names are to retain compatibility with the AWS calls
-    def get_parameter(self, Name=name):
+    def get_parameter(self, Name):
         if self.ssm is not None:
-            return self.ssm.get_parameter(Name=name)
+            return self.ssm.get_parameter(Name=Name)
         else:
             try:
-                return {'Parameter': {'Value': self.kvs[name]}}
+                return {'Parameter': {'Value': self.kvs[Name]}}
             except KeyError:
                 raise ClientError(operation_name='get_parameter',
                                   error_response={'ResponseMetadata': {'MaxAttemptsReached': True}})
