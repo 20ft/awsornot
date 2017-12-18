@@ -15,7 +15,7 @@
 from setuptools import setup
 
 setup(name='awsornot',
-      version='1.0.2',
+      version='1.0.1',
       author='David Preece',
       author_email='davep@20ft.nz',
       url='https://20ft.nz',
