@@ -138,4 +138,6 @@ class LogHandler(logging.Handler):
                 except EndpointConnectionError:
                     print("...Name resolution has failed")
                     self.queue.put(None)
-
+                except BaseException as e:
+                    print("...A bad thing happened with the logging thread: " + str(e))
+                    return
