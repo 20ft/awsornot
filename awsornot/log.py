@@ -42,7 +42,7 @@ class LogHandler(logging.Handler):
             stream_name = stream + '/' + iid
 
         except requests.exceptions.ConnectionError:  # not running under AWS
-            level = logging.DEBUG
+            level = logging.INFO
             stream_name = None
 
         super().__init__(level)
