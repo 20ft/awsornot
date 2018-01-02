@@ -20,6 +20,7 @@ import logging
 import json
 import time
 import signal
+import os
 import botocore.errorfactory
 from botocore.exceptions import ClientError, EndpointConnectionError
 from multiprocessing import Queue, Process
@@ -82,6 +83,9 @@ class LogHandler(logging.Handler):
         """Runs as a background process delivering the logs as they arrive (to avoid stalling the event loop)"""
         # ignore KeyboardInterrupt because we want to log as we close down
         signal.signal(signal.SIGINT, signal.SIG_IGN)
+        
+        # really not very important
+        os.setpriority(os.PRIO_PROCESS, 0, 15)
 
         # create a cloud watch log client
         dynamic_data_text = requests.get('http://169.254.169.254/latest/dynamic/instance-identity/document').text
