@@ -23,7 +23,8 @@ import signal
 import os
 import botocore.errorfactory
 from botocore.exceptions import ClientError, EndpointConnectionError
-from multiprocessing import Queue, Process
+from threading import Thread
+from queue import Queue
 
 
 class LogHandler(logging.Handler):
@@ -51,12 +52,12 @@ class LogHandler(logging.Handler):
         self.formatter = logging.Formatter(fmt='%(levelname)-8s %(message)s')
         logging.basicConfig(level=level, handlers=[self])
 
-        # delivery process (aws only)
+        # delivery thread (aws only)
         self.queue = None
         if stream_name is not None:
             self.queue = Queue()
-            self.process = Process(target=self.background, args=(group, stream_name, self.queue))
-            self.process.start()
+            self.thread = Thread(target=self.background, args=(group, stream_name, self.queue))
+            self.thread.start()
 
     def emit(self, record):
         # urllib and boto try to log themselves doing all sorts
@@ -75,18 +76,12 @@ class LogHandler(logging.Handler):
             self.queue.put(record)
 
     def stop(self):
-        """Posts a message on the queue telling the logging process to stop."""
+        """Posts a message on the queue telling the logging thread to stop."""
         if self.queue is not None:
             self.queue.put(None)
 
     def background(self, group, stream, queue):
-        """Runs as a background process delivering the logs as they arrive (to avoid stalling the event loop)"""
-        # ignore KeyboardInterrupt because we want to log as we close down
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
-        
-        # really not very important
-        os.setpriority(os.PRIO_PROCESS, 0, 15)
-
+        """Runs as a background thread delivering the logs as they arrive (to avoid stalling the event loop)"""
         # create a cloud watch log client
         dynamic_data_text = requests.get('http://169.254.169.254/latest/dynamic/instance-identity/document').text
         aws_logger = boto3.client('logs', region_name=json.loads(dynamic_data_text)['region'])
