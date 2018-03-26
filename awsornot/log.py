@@ -24,7 +24,7 @@ import os
 import botocore.errorfactory
 from botocore.exceptions import ClientError, EndpointConnectionError
 from threading import Thread
-from queue import Queue
+from queue import Queue, Empty
 
 
 class LogHandler(logging.Handler):
@@ -110,23 +110,41 @@ class LogHandler(logging.Handler):
             sequence_token = streams[stream]['uploadSequenceToken']
 
         # loop picking logs off the queue and delivering
-        while True:
-            record = queue.get()
-            if record is None:
-                return
-            text = self.formatter.format(record)
+        running = True
+        while running:
+            logEvents = []
+            try:
+                while True:
+                    # fetch the next record, unless there isn't one for one second
+                    record = queue.get(timeout=1)
+
+                    # None causes the loop to exit cleanly but still deliver the queue of log events
+                    if record is None:
+                        running = False
+                    else:
+                        text = self.formatter.format(record)
+                        logEvents.append({'timestamp': int(record.created * 1000), 'message': text})
+
+                    # if there are very many log events fake a timeout hit so they get delivered
+                    if len(logEvents) == 256:
+                        raise Empty
+
+            # timeout hit
+            except Empty:
+                pass  # timeout hit
+
+            # loop back if nothing to deliver
+            if len(logEvents) == 0:
+                continue
+
+            # loop until delivered or bad things happen
             sent = False
             while not sent:
                 try:
                     result = aws_logger.put_log_events(
                             logGroupName=group,
                             logStreamName=stream,
-                            logEvents=[
-                                {
-                                    'timestamp': int(record.created * 1000),
-                                    'message': text
-                                }
-                            ],
+                            logEvents=logEvents,
                             sequenceToken=sequence_token
                     )
                     sequence_token = result['nextSequenceToken']
