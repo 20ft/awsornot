@@ -112,7 +112,7 @@ class LogHandler(logging.Handler):
         # loop picking logs off the queue and delivering
         running = True
         while running:
-            logEvents = []
+            log_events = []
             try:
                 while True:
                     # fetch the next record, unless there isn't one for one second
@@ -123,10 +123,10 @@ class LogHandler(logging.Handler):
                         running = False
                     else:
                         text = self.formatter.format(record)
-                        logEvents.append({'timestamp': int(record.created * 1000), 'message': text})
+                        log_events.append({'timestamp': int(record.created * 1000), 'message': text})
 
                     # if there are very many log events fake a timeout hit so they get delivered
-                    if len(logEvents) == 256:
+                    if len(log_events) == 256:
                         raise Empty
 
             # timeout hit
@@ -134,7 +134,7 @@ class LogHandler(logging.Handler):
                 pass  # timeout hit
 
             # loop back if nothing to deliver
-            if len(logEvents) == 0:
+            if len(log_events) == 0:
                 continue
 
             # loop until delivered or bad things happen
@@ -144,7 +144,7 @@ class LogHandler(logging.Handler):
                     result = aws_logger.put_log_events(
                             logGroupName=group,
                             logStreamName=stream,
-                            logEvents=logEvents,
+                            logEvents=log_events,
                             sequenceToken=sequence_token
                     )
                     sequence_token = result['nextSequenceToken']
