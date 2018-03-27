@@ -59,4 +59,4 @@ def ensure_zpool(name):
             if os.path.exists(device):
                 call(['/sbin/zpool', 'create', '-f', name, device])
                 return
-    raise RuntimeError("Could not create zpool: " + name)
+        raise RuntimeError("Could not create zpool: " + name)
