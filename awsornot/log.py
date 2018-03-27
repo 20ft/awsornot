@@ -32,6 +32,8 @@ class LogHandler(logging.Handler):
         try:
             # see if we are logging verbosely
             dynamic_data_text = requests.get('http://169.254.169.254/latest/dynamic/instance-identity/document').text
+            if '404 Not Found' in dynamic_data_text:
+                raise requests.exceptions.ConnectionError
             ssm = boto3.client('ssm', region_name=json.loads(dynamic_data_text)['region'])
             try:
                 verbose_string = ssm.get_parameter(Name='/20ft/verbose')['Parameter']['Value']

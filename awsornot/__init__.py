@@ -16,6 +16,8 @@ import json
 import cbor
 import requests
 import boto3
+import os
+from subprocess import call, check_output
 from botocore.exceptions import ClientError
 
 dd_result_cache = None
@@ -29,6 +31,8 @@ def dynamic_data_or_none():
         try:
             dynamic_data_text = requests.get('http://169.254.169.254/latest/dynamic/instance-identity/document',
                                              timeout=0.5).text
+            if '404 Not Found' in dynamic_data_text:
+                raise requests.exceptions.ConnectionError
             dd_result_cache = json.loads(dynamic_data_text)
         except requests.exceptions.ConnectionError:
             dd_result_cache = None
@@ -44,3 +48,15 @@ def boto_client(type, dynamic_data):
     except ClientError:
         raise RuntimeError("There was a problem creating a client for '%s'\n" +
                            "Please ensure you are running under a profile with the correct permissions.")
+
+
+def ensure_zpool(name):
+    """Ensure the existence of a named zpool"""
+    zpools = check_output(['/sbin/zpool', 'list'])
+    if name.encode() not in zpools:
+        devices = ['/dev/xvdb', '/dev/vdb', '/dev/sda4', '/dev/nvme1n1']
+        for device in devices:
+            if os.path.exists(device):
+                call(['/sbin/zpool', 'create', '-f', name, device])
+                return
+    raise RuntimeError("Could not create zpool: " + name)
