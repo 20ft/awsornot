@@ -30,7 +30,7 @@ def dynamic_data_or_none():
     if not dd_have_result:
         try:
             dynamic_data_text = requests.get('http://169.254.169.254/latest/dynamic/instance-identity/document',
-                                             timeout=0.5).text
+                                             timeout=2).text
             if '404 Not Found' in dynamic_data_text:
                 raise requests.exceptions.ConnectionError
             dd_result_cache = json.loads(dynamic_data_text)

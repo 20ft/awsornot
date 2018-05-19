@@ -1,4 +1,4 @@
-# Copyright (c) 2017 David Preece, All rights reserved.
+# Copyright (c) 2017-18 David Preece, All rights reserved.
 #
 # Permission to use, copy, modify, and/or distribute this software for any
 # purpose with or without fee is hereby granted.
@@ -15,7 +15,7 @@
 from setuptools import setup
 
 setup(name='awsornot',
-      version='1.1.1',
+      version='1.1.2',
       author='David Preece',
       author_email='davep@20ft.nz',
       url='https://20ft.nz',
